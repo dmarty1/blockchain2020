@@ -1,6 +1,7 @@
 import hashlib
 import json
 import requests
+import base64
 
 from time import time
 from uuid import uuid4
@@ -165,6 +166,7 @@ class Blockchain(object):
 			sk = self.labs[int(recipient)][1]
 
 		#convert amount dictionary into a binary
+
 		message = json.dumps(amount)
 		message_amount = bytes(message, encoding="ascii")
 
@@ -480,6 +482,8 @@ def mine():
 		if not verified_transaction:
 			allVerified = False
 
+		#once I check the signure I don't need it 
+		#it is also not in a json printable format
 		del t['signature']
 
 	response = {
@@ -563,7 +567,12 @@ def consensus():
 
 @app.route('/check/none_used_transactions', methods=['GET'])
 def check():
-    return jsonify(blockchain.none_used_transactions), 200
+	printable = [] 
+	for t in blockchain.none_used_transactions:
+		new_t = {'sender':t['sender'],'recipient':t['recipient'],'amount':t['amount']}
+		printable.append(new_t)
+	return jsonify(printable), 200
+
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port=5000) #runs the server on port 5000
