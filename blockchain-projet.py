@@ -1,6 +1,7 @@
 import hashlib
 import json
 import requests
+import base64
 
 from time import time
 from uuid import uuid4
@@ -8,6 +9,8 @@ from textwrap import dedent
 from urllib.parse import urlparse
 
 from flask import Flask, jsonify, request
+
+from ecdsa import SigningKey, NIST384p
 
 """
 each Block:
@@ -33,31 +36,33 @@ class Blockchain(object):
 		self.none_used_transactions = []
 
 		self.labs = dict()
-		self.suppliers = []
-		self.pharmas = []
+		self.suppliers = dict()
+		self.pharmas = dict()
 
 		self.vacines = dict()
 		self.products = set()
+
+		self.public_keys = []
 
 		#Create the genesis block
 		self.new_block(previous_hash=1, proof=100)
 
 		self.nodes = set()
 
-	def add_lab(self,lab_key,vacines,products_allowed):
+	def add_lab(self,lab_key,signing_key,products_allowed):
 		#key of lab ends with 0
-		self.labs[lab_key] = products_allowed
+		self.labs[lab_key] = [products_allowed,signing_key] 
 		pass
 
-	def add_suppliers(self,supplier_key,products):
+	def add_suppliers(self,supplier_key,signing_key):
 		#key of the supply ends with no 0
-		self.suppliers.append(supplier_key)
+		self.suppliers[supplier_key] = signing_key
 		#self.suppliers[supplier_key]["allowed"] = products
 		pass
 
-	def add_pharmas(self,pharma_key, vacines):
+	def add_pharmas(self,pharma_key,signing_key):
 		#key of the pharma ends with 00
-		self.pharmas.append(pharma_key)
+		self.pharmas[pharma_key] = signing_key
 		#self.pharmas[pharma_key]["allowed"] = vacines
 		pass
 
@@ -87,13 +92,13 @@ class Blockchain(object):
 		z.update(vacines)
 		self.vacines = z
 
-
+	'''
 	def inc_product(self,supplier,quantity):
 		#if time%20==0:
 		#for supplier in self.suppliers:
 		for e,i in enumerate(self.suppliers[supplier]):
 			self.suppliers[supplier[i]] += quantity[i]
-
+	'''
 	def new_block(self, proof, previous_hash=None):
 		'''
 		Creates a new Block in the Blockchain
@@ -125,6 +130,7 @@ class Blockchain(object):
 		'''
 		#We must make sure that the Dictionary is Ordered, 
 		#or we'll have inconsistent hashes 
+
 		block_string = json.dumps(block,sort_keys=True).encode()
 		return hashlib.sha256(block_string).hexdigest()
 	
@@ -132,6 +138,12 @@ class Blockchain(object):
 	def last_block(self):
 		#Returns the last Block in the chain
 		return self.chain[-1]
+
+	@staticmethod
+	def dict_to_binary(the_dict):
+	    str = json.dumps(the_dict)
+	    binary = ' '.join(format(ord(letter), 'b') for letter in str)
+	    return binary
 
 	def new_transaction(self, sender, recipient, amount):
 
@@ -143,11 +155,40 @@ class Blockchain(object):
 		:return: <int> The index of the Block that will hold this transaction
 		"""
 		
+		#sk = SigningKey.generate(curve=NIST384p) #private
+		#vk = sk.verifying_key #public 
+		
+		if recipient[-1]!="0": #supplier
+			sk = self.suppliers[int(recipient)]
+		elif recipient[-2:]=="00": #pharma
+			sk = self.pharmas[int(recipient)]
+		else: #labs
+			sk = self.labs[int(recipient)][1]
+
+		#convert amount dictionary into a binary
+		#message_amount = self.dict_to_binary(amount) 
+		'''
+		base64_bytes = base64.b64encode(message_bytes)
+		base64_message = base64_bytes.decode('ascii')
+		'''
+		
+		#message_amount = (json.dumps(amount)).encode("utf-8")
+
+		message = json.dumps(amount)
+		message_bytes = message.encode('ascii')
+		message_amount = base64.b64encode(message_bytes)
+
+		#print("\n",message_amount,"\n")
+		#print("\n",b"message","\n")
+		signature = sk.sign(message_amount)
+		#signature_str = base64.b64decode(signature)
+		#.decode("utf-8", "ignore")
 
 		a_transaction = {
 			'sender' : sender,
 			'recipient': recipient,
 			'amount' : amount,
+			'signature': signature,
 		}
 
 		if sender=="0" and recipient[-1]!="0": #cannot send directly from 0 to labs or pharma:
@@ -208,11 +249,12 @@ class Blockchain(object):
 		amount_used = dict()
 		sender = a_transaction['sender']
 		recipient = int(a_transaction['recipient'])
+		signature = a_transaction['signature']
 		#amount_needed = a_transaction['amount']
 		new_none_used_transactions = []
 		
 		for ing in amount_needed:
-			if recipient in self.labs and ing not in self.labs[recipient]:
+			if recipient in self.labs and ing not in self.labs[recipient][0]:
 				return dict(),[]
 			amount_used[ing] = 0
 		for transaction in self.none_used_transactions:
@@ -235,7 +277,7 @@ class Blockchain(object):
 						empty = False
 						break
 				if not empty:
-					new_transaction = {'sender':sender,'recipient':sender,'amount':amount_left}
+					new_transaction = {'sender':sender,'recipient':sender,'amount':amount_left,'signature':signature}
 					new_none_used_transactions.append(new_transaction)
 			else:
 				new_none_used_transactions.append(transaction)
@@ -377,18 +419,27 @@ blockchain = Blockchain()
 
 #lab1 
 lab_key1 = 20
-vacinesl1 = ["vacine_1"]
+sk1 = SigningKey.generate(curve=NIST384p)
 products_allowedl1 = ["ing1","ing2","ing3"]
-blockchain.add_lab(lab_key1,vacinesl1,products_allowedl1)
+blockchain.add_lab(lab_key1,sk1,products_allowedl1)
+blockchain.public_keys.append(sk1.verifying_key)
+
+#supplier 0 of all goods
+supplier_key0 = 0
+sk0 = SigningKey.generate(curve=NIST384p)
+blockchain.add_suppliers(supplier_key0,sk0)
+blockchain.public_keys.append(sk0.verifying_key)
 #supplier1
 supplier_key1 = 1
-products_alloweds1 = ["ing1","ing2","ing3"]
-blockchain.add_suppliers(supplier_key1,products_alloweds1)
-
+sk2 = SigningKey.generate(curve=NIST384p)
+blockchain.add_suppliers(supplier_key1,sk2)
+blockchain.public_keys.append(sk2.verifying_key)
 #pharma1 
 pharma_key1 = 300
-vacinesp1 = ["vacine_1"]
-blockchain.add_pharmas(pharma_key1, vacinesp1)
+sk3 = SigningKey.generate(curve=NIST384p)
+blockchain.add_pharmas(pharma_key1, sk3)
+blockchain.public_keys.append(sk3.verifying_key)
+
 blockchain.add_vacines()
 
 
@@ -412,13 +463,38 @@ def mine():
 		amount=1,
 	)
 	''' 
-	
+
+
 	
 
 	#Forge the new Block by adding it to the chain
 	
 	previous_hash = blockchain.hash(last_block)
 	block = blockchain.new_block(proof, previous_hash)
+
+	#check signatures
+	allVerified = True
+	for t in block['transactions']:
+		verified_transaction = False
+		sender = t['sender']
+		recipient = t['recipient']
+		amount = t['amount']
+		signature = t['signature']
+
+		message = json.dumps(amount)
+		message_bytes = message.encode('ascii')
+		message_amount = base64.b64encode(message_bytes)
+	
+		for vk in blockchain.public_keys:
+			print("vk",vk,"\n")
+			print("signature",signature,"\n")
+			print("message_amount",message_amount,"\n")
+			if vk.verify(signature, message_amount):
+				verified_transaction = True
+		if not verified_transaction:
+			allVerified = False
+
+		del t['signature']
 
 	response = {
 		'message' : "New Block Forged",
@@ -427,6 +503,14 @@ def mine():
 		'proof' : block['proof'],
 		'previous_hash': block['previous_hash'],
 	}
+
+	if not allVerified:
+		blockchain.chain.pop()
+		#remove block from the chain
+		response = {"New Block Not Forged"}
+	
+
+	
 	
 
 	return jsonify(response), 200
