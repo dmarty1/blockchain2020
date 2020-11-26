@@ -1,7 +1,6 @@
 import hashlib
 import json
 import requests
-import base64
 
 from time import time
 from uuid import uuid4
@@ -166,23 +165,11 @@ class Blockchain(object):
 			sk = self.labs[int(recipient)][1]
 
 		#convert amount dictionary into a binary
-		#message_amount = self.dict_to_binary(amount) 
-		'''
-		base64_bytes = base64.b64encode(message_bytes)
-		base64_message = base64_bytes.decode('ascii')
-		'''
-		
-		#message_amount = (json.dumps(amount)).encode("utf-8")
-
 		message = json.dumps(amount)
-		message_bytes = message.encode('ascii')
-		message_amount = base64.b64encode(message_bytes)
+		message_amount = bytes(message, encoding="ascii")
 
-		#print("\n",message_amount,"\n")
-		#print("\n",b"message","\n")
 		signature = sk.sign(message_amount)
-		#signature_str = base64.b64decode(signature)
-		#.decode("utf-8", "ignore")
+
 
 		a_transaction = {
 			'sender' : sender,
@@ -482,15 +469,14 @@ def mine():
 		signature = t['signature']
 
 		message = json.dumps(amount)
-		message_bytes = message.encode('ascii')
-		message_amount = base64.b64encode(message_bytes)
+		message_amount = bytes(message, encoding="ascii")
 	
 		for vk in blockchain.public_keys:
-			print("vk",vk,"\n")
-			print("signature",signature,"\n")
-			print("message_amount",message_amount,"\n")
-			if vk.verify(signature, message_amount):
-				verified_transaction = True
+			try:
+				if vk.verify(signature, message_amount):
+					verified_transaction = True
+			except:
+				pass
 		if not verified_transaction:
 			allVerified = False
 
@@ -509,10 +495,6 @@ def mine():
 		#remove block from the chain
 		response = {"New Block Not Forged"}
 	
-
-	
-	
-
 	return jsonify(response), 200
 
 @app.route('/transactions/new',methods=['POST']) #sending data
