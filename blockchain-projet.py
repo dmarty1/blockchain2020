@@ -1,7 +1,6 @@
 import hashlib
 import json
 import requests
-import base64
 
 from time import time
 from uuid import uuid4
@@ -20,13 +19,6 @@ each Block:
 -a proof
 -the hash of the previous Block 
 """
-
-'''
-Dictionaire de labo:
-la cle du labo
-les types de produits autorisés
-'''
-
 
 class Blockchain(object):
 	def __init__(self):
@@ -92,13 +84,7 @@ class Blockchain(object):
 		z.update(vacines)
 		self.vacines = z
 
-	'''
-	def inc_product(self,supplier,quantity):
-		#if time%20==0:
-		#for supplier in self.suppliers:
-		for e,i in enumerate(self.suppliers[supplier]):
-			self.suppliers[supplier[i]] += quantity[i]
-	'''
+	
 	def new_block(self, proof, previous_hash=None):
 		'''
 		Creates a new Block in the Blockchain
@@ -154,9 +140,9 @@ class Blockchain(object):
 		:param amount: <int> Amount
 		:return: <int> The index of the Block that will hold this transaction
 		"""
-		
-		#sk = SigningKey.generate(curve=NIST384p) #private
-		#vk = sk.verifying_key #public 
+		#not allowed to send 
+		if int(recipient) not in self.suppliers and int(recipient) not in self.pharmas and int(recipient) not in self.labs:
+			return -1
 		
 		if recipient[-1]!="0": #supplier
 			sk = self.suppliers[int(recipient)]
@@ -164,6 +150,7 @@ class Blockchain(object):
 			sk = self.pharmas[int(recipient)]
 		else: #labs
 			sk = self.labs[int(recipient)][1]
+
 
 		#convert amount dictionary into a binary
 
@@ -202,37 +189,12 @@ class Blockchain(object):
 				amount_used ,new_none_used_transactions= self.update_used_transactions(a_transaction,amount_needed)
 				if self.equivalent(amount_used,amount_needed):#amount):#amount_used == amount:
 					self.none_used_transactions = new_none_used_transactions
-
-			#if self.equivalent(amount_used,amount) or sender=="0":
 				
 					self.none_used_transactions.append(a_transaction)
 					self.current_transactions.append(a_transaction)
 					return self.last_block['index']+1
 				else:
 					return -1
-	'''
-	def update_used_transactions(self,a_transaction):
-		amount_used = 0
-		sender = a_transaction['sender']
-		recipient = a_transaction['recipient']
-		amount = a_transaction['amount']
-		new_none_used_transactions = []
-		for transaction in self.none_used_transactions:
-
-			if transaction['recipient']==sender and amount_used<amount:
-				if transaction['amount']>(amount-amount_used):
-					amount_added = amount-amount_used
-					amount_used += amount_added
-					amount_left = transaction['amount'] - amount_added
-					new_transaction = {'sender':sender,'recipient':sender,'amount':amount_left}
-					new_none_used_transactions.append(new_transaction)
-				else:
-					amount_added=transaction['amount']
-					amount_used +=amount_added
-			else:
-				new_none_used_transactions.append(transaction)
-		return amount_used, new_none_used_transactions
-	'''
 
 	def update_used_transactions(self,a_transaction,amount_needed):
 		amount_used = dict()
@@ -294,14 +256,7 @@ class Blockchain(object):
 				return False
 		return True
 
-
-
 	def proof_of_work(self,last_proof):
-
-
-		'''
-		valider le labo avec le dictionaire .....
-		'''
 
 		'''
 		Simple Proof of Work Algorithm:
@@ -424,14 +379,12 @@ sk2 = SigningKey.generate(curve=NIST384p)
 blockchain.add_suppliers(supplier_key1,sk2)
 blockchain.public_keys.append(sk2.verifying_key)
 #pharma1 
-pharma_key1 = 300
+pharma_key1 = 200
 sk3 = SigningKey.generate(curve=NIST384p)
 blockchain.add_pharmas(pharma_key1, sk3)
 blockchain.public_keys.append(sk3.verifying_key)
 
 blockchain.add_vacines()
-
-
 
 
 @app.route('/mine', methods=['GET']) #getting data
@@ -442,19 +395,6 @@ def mine():
 	last_block = blockchain.last_block
 	last_proof = last_block['proof']
 	proof = blockchain.proof_of_work(last_proof)
-
-	#We must receive a reward for finding the proof
-	#The sender is "0" to signify that this node has mined a new coin
-	'''
-	blockchain.new_transaction(
-		sender = "0",
-		recipient=node_identifier, #recipient of the mined block is the address of the node
-		amount=1,
-	)
-	''' 
-
-
-	
 
 	#Forge the new Block by adding it to the chain
 	
