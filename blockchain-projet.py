@@ -33,8 +33,8 @@ class Blockchain(object):
 		self.none_used_transactions = []
 
 		self.labs = dict()
-		self.suppliers = dict()
-		self.pharmas = dict()
+		self.suppliers = []
+		self.pharmas = []
 
 		self.vacines = dict()
 		self.products = set()
@@ -45,22 +45,23 @@ class Blockchain(object):
 		self.nodes = set()
 
 	def add_lab(self,lab_key,vacines,products_allowed):
-		self.labs[lab_key] = dict()
-		self.labs[lab_key]["vacines"] = vacines
-		self.labs[lab_key]["allowed"] = products_allowed
+		#key of lab ends with 0
+		self.labs[lab_key] = products_allowed
 		pass
 
 	def add_suppliers(self,supplier_key,products):
-		self.suppliers[supplier_key] = dict()
-		self.suppliers[supplier_key]["allowed"] = products
+		#key of the supply ends with no 0
+		self.suppliers.append(supplier_key)
+		#self.suppliers[supplier_key]["allowed"] = products
 		pass
 
 	def add_pharmas(self,pharma_key, vacines):
-		self.pharmas[pharma_key] = dict()
-		self.pharmas[pharma_key]["allowed"] = vacines
+		#key of the pharma ends with 00
+		self.pharmas.append(pharma_key)
+		#self.pharmas[pharma_key]["allowed"] = vacines
 		pass
 
-	def vacines(self,vacines=None):
+	def add_vacines(self,vacines=dict()):
 		d1 = dict()
 		d1["vacine_1"] = dict()
 		d1["vacine_1"]["ing1"] = 2
@@ -82,8 +83,9 @@ class Blockchain(object):
 			for i in d1[v]:
 				if i not in self.products:
 					self.products.add(i)
-
-		return d1+vacines
+		z = d1.copy()
+		z.update(vacines)
+		self.vacines = z
 
 
 	def inc_product(self,supplier,quantity):
@@ -140,22 +142,35 @@ class Blockchain(object):
 		:param amount: <int> Amount
 		:return: <int> The index of the Block that will hold this transaction
 		"""
-		if self.valid_transaction(sender,recipient,amount):
+		
 
-			a_transaction = {
-				'sender' : sender,
-				'recipient': recipient,
-				'amount' : amount,
-			}
+		a_transaction = {
+			'sender' : sender,
+			'recipient': recipient,
+			'amount' : amount,
+		}
 
-			if sender=="0":
-				self.none_used_transactions.append(a_transaction)
-				self.current_transactions.append(a_transaction)
-				return self.last_block['index']+1
+		if sender=="0" and recipient[-1]!="0": #cannot send directly from 0 to labs or pharma:
+			self.none_used_transactions.append(a_transaction)
+			self.current_transactions.append(a_transaction)
+			return self.last_block['index']+1
+
+		else:
+			if recipient[-2:]=="00": #received by a pharma
+				amount_needed = self.trans_vacine_ing(a_transaction)
+				amount_used ,new_none_used_transactions= self.update_used_transactions(a_transaction,amount_needed)
+				if self.equivalent(amount_used,amount_needed):
+					self.none_used_transactions = new_none_used_transactions
+					self.current_transactions.append(a_transaction)
+					return self.last_block['index']+1
+				else:
+					return -1
+
 
 			else:
-				amount_used ,new_none_used_transactions= self.update_used_transactions(a_transaction)
-				if self.equivalent(amount_used,amount):#amount_used == amount:
+				amount_needed = a_transaction['amount']
+				amount_used ,new_none_used_transactions= self.update_used_transactions(a_transaction,amount_needed)
+				if self.equivalent(amount_used,amount_needed):#amount):#amount_used == amount:
 					self.none_used_transactions = new_none_used_transactions
 
 			#if self.equivalent(amount_used,amount) or sender=="0":
@@ -189,14 +204,16 @@ class Blockchain(object):
 		return amount_used, new_none_used_transactions
 	'''
 
-	def update_used_transactions(self,a_transaction):
-		print("start", len(self.none_used_transactions))
+	def update_used_transactions(self,a_transaction,amount_needed):
 		amount_used = dict()
 		sender = a_transaction['sender']
-		recipient = a_transaction['recipient']
-		amount_needed = a_transaction['amount']
+		recipient = int(a_transaction['recipient'])
+		#amount_needed = a_transaction['amount']
 		new_none_used_transactions = []
+		
 		for ing in amount_needed:
+			if recipient in self.labs and ing not in self.labs[recipient]:
+				return dict(),[]
 			amount_used[ing] = 0
 		for transaction in self.none_used_transactions:
 			if transaction['recipient']==sender and not self.equivalent(amount_used,amount_needed):
@@ -223,32 +240,30 @@ class Blockchain(object):
 			else:
 				new_none_used_transactions.append(transaction)
 		return amount_used, new_none_used_transactions
+
+
+	def trans_vacine_ing(self,a_transaction):
+		amount_needed = dict()
+		for vac in a_transaction['amount']:
+			times = a_transaction['amount'][vac]
+			print(vac,self.vacines,"\n")
+			for ing in self.vacines[vac]:
+				if ing not in amount_needed:
+					amount_needed[ing] = self.vacines[vac][ing]*times
+				else:
+					amount_needed[ing] += self.vacines[vac][ing]*times
+		return amount_needed 
 	
 
 	def equivalent(self,a1,a2):
+		if len(a1)!=len(a2):
+			return False
 		for i in a1:
 			if a1[i]!=a2[i]:
 				return False
 		return True
 
 
-	def valid_transaction(self, sender, recipient,amount):
-		actor = dict()
-		if recipient in self.labs:
-			actor = self.labs
-		elif recipient in self.suppliers:
-			actor = self.suppliers
-		elif recipient in self.pharmas:
-			actor = self.pharmas
-
-		#validate that the actor is allowed to recieve this
-		'''
-		for a in amount:
-			if recipient in actor:
-				if a not in actor[recipient]["allowed"]:
-					return False
-		'''
-		return True
 
 	def proof_of_work(self,last_proof):
 
@@ -361,19 +376,20 @@ node_identifier = str(uuid4()).replace('-','')
 blockchain = Blockchain()
 
 #lab1 
-lab_key1 = 1234
+lab_key1 = 20
 vacinesl1 = ["vacine_1"]
 products_allowedl1 = ["ing1","ing2","ing3"]
 blockchain.add_lab(lab_key1,vacinesl1,products_allowedl1)
 #supplier1
-supplier_key1 = 2457
+supplier_key1 = 1
 products_alloweds1 = ["ing1","ing2","ing3"]
 blockchain.add_suppliers(supplier_key1,products_alloweds1)
 
 #pharma1 
-pharma_key1 = 10385
+pharma_key1 = 300
 vacinesp1 = ["vacine_1"]
 blockchain.add_pharmas(pharma_key1, vacinesp1)
+blockchain.add_vacines()
 
 
 
@@ -478,6 +494,10 @@ def consensus():
         }
 
     return jsonify(response), 200
+
+@app.route('/check/none_used_transactions', methods=['GET'])
+def check():
+    return jsonify(blockchain.none_used_transactions), 200
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port=5000) #runs the server on port 5000
