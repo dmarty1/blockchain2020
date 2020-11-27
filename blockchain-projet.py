@@ -31,7 +31,7 @@ class Blockchain(object):
 		self.suppliers = dict()
 		self.pharmas = dict()
 
-		self.vacines = dict()
+		self.vaccines = dict()
 		self.products = set()
 
 		self.public_keys = []
@@ -55,34 +55,34 @@ class Blockchain(object):
 	def add_pharmas(self,pharma_key,signing_key):
 		#key of the pharma ends with 00
 		self.pharmas[pharma_key] = signing_key
-		#self.pharmas[pharma_key]["allowed"] = vacines
+		#self.pharmas[pharma_key]["allowed"] = vaccines
 		pass
 
-	def add_vacines(self,vacines=dict()):
+	def add_vaccines(self,vaccines=dict()):
 		d1 = dict()
-		d1["vacine_1"] = dict()
-		d1["vacine_1"]["ing1"] = 2
-		d1["vacine_1"]["ing2"] = 1
-		d1["vacine_1"]["ing3"] = 4
+		d1["vaccine_1"] = dict()
+		d1["vaccine_1"]["ing1"] = 2
+		d1["vaccine_1"]["ing2"] = 1
+		d1["vaccine_1"]["ing3"] = 4
 
-		d1["vacine_2"] = dict()
-		d1["vacine_2"]["ing2"] = 2
-		d1["vacine_2"]["ing4"] = 1
-		d1["vacine_2"]["ing5"] = 4
-		d1["vacine_2"]["ing6"] = 1
+		d1["vaccine_2"] = dict()
+		d1["vaccine_2"]["ing2"] = 2
+		d1["vaccine_2"]["ing4"] = 1
+		d1["vaccine_2"]["ing5"] = 4
+		d1["vaccine_2"]["ing6"] = 1
 
-		d1["vacine_3"] = dict()
-		d1["vacine_3"]["ing1"] = 1
-		d1["vacine_3"]["ing2"] = 1
-		d1["vacine_3"]["ing3"] = 1
+		d1["vaccine_3"] = dict()
+		d1["vaccine_3"]["ing1"] = 1
+		d1["vaccine_3"]["ing2"] = 1
+		d1["vaccine_3"]["ing3"] = 1
 
 		for v in d1:
 			for i in d1[v]:
 				if i not in self.products:
 					self.products.add(i)
 		z = d1.copy()
-		z.update(vacines)
-		self.vacines = z
+		z.update(vaccines)
+		self.vaccines = z
 
 	
 	def new_block(self, proof, previous_hash=None):
@@ -239,12 +239,12 @@ class Blockchain(object):
 		amount_needed = dict()
 		for vac in a_transaction['amount']:
 			times = a_transaction['amount'][vac]
-			print(vac,self.vacines,"\n")
-			for ing in self.vacines[vac]:
+			print(vac,self.vaccines,"\n")
+			for ing in self.vaccines[vac]:
 				if ing not in amount_needed:
-					amount_needed[ing] = self.vacines[vac][ing]*times
+					amount_needed[ing] = self.vaccines[vac][ing]*times
 				else:
-					amount_needed[ing] += self.vacines[vac][ing]*times
+					amount_needed[ing] += self.vaccines[vac][ing]*times
 		return amount_needed 
 	
 
@@ -362,29 +362,38 @@ node_identifier = str(uuid4()).replace('-','')
 blockchain = Blockchain()
 
 #lab1 
-lab_key1 = 20
+lab_key1 = 10
 sk1 = SigningKey.generate(curve=NIST384p)
 products_allowedl1 = ["ing1","ing2","ing3"]
 blockchain.add_lab(lab_key1,sk1,products_allowedl1)
 blockchain.public_keys.append(sk1.verifying_key)
+
+#lab2
+lab_key2 = 20
+sk4 = SigningKey.generate(curve=NIST384p)
+products_allowedl2 = ["ing1","ing2","ing4","ing5","ing6"]
+blockchain.add_lab(lab_key2,sk4,products_allowedl2)
+blockchain.public_keys.append(sk4.verifying_key)
 
 #supplier 0 of all goods
 supplier_key0 = 0
 sk0 = SigningKey.generate(curve=NIST384p)
 blockchain.add_suppliers(supplier_key0,sk0)
 blockchain.public_keys.append(sk0.verifying_key)
+
 #supplier1
 supplier_key1 = 1
 sk2 = SigningKey.generate(curve=NIST384p)
 blockchain.add_suppliers(supplier_key1,sk2)
 blockchain.public_keys.append(sk2.verifying_key)
+
 #pharma1 
-pharma_key1 = 200
+pharma_key1 = 100
 sk3 = SigningKey.generate(curve=NIST384p)
 blockchain.add_pharmas(pharma_key1, sk3)
 blockchain.public_keys.append(sk3.verifying_key)
 
-blockchain.add_vacines()
+blockchain.add_vaccines()
 
 
 @app.route('/mine', methods=['GET']) #getting data
